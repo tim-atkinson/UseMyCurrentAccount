@@ -17,13 +17,15 @@ There is no build system, package manager, linter, or test suite. The extension 
 
 The entire extension is two files:
 
-- `manifest.json` — Manifest V2, with a **persistent** background page. Permissions: `identity`/`identity.email` (to read the profile's email), `storage` (to persist the on/off toggle), and `webRequest`/`webRequestBlocking` scoped to `login.microsoftonline.com`.
-- `src/background.js` — all logic:
-  - Reads the profile email via `chrome.identity.getProfileUserInfo` at startup.
-  - Two **blocking** `chrome.webRequest.onBeforeRequest` listeners rewrite sign-in URLs by returning a `redirectUrl`:
-    - `/authorize*` requests: appends `login_hint=<email>` — but only if neither `login_hint` nor `sid` is already present (a `sid` means a session is already selected; overriding it would break sign-in).
-    - `/saml2*` and `/wsfed*` requests: appends `whr=<email domain>` if `whr` is not already present (SAML/WS-Fed flows use realm discovery, not `login_hint`).
-  - Clicking the toolbar icon toggles the behavior on/off; state is persisted in `chrome.storage.local` and reflected as an "Off" badge on the icon.
+- `manifest.json` — Manifest V3, with a (non-persistent) background **service worker**. Permissions: `identity`/`identity.email` (to read the profile's email), `storage` (to persist the on/off toggle), and `declarativeNetRequest` with `host_permissions` scoped to `login.microsoftonline.com`.
+- `src/background.js` — all logic. MV3 forbids blocking `webRequest`, so URL rewriting is done with **declarativeNetRequest dynamic rules** (installed via `updateDynamicRules`, keyed by fixed rule ids):
+  - Redirect rules use `queryTransform.addOrReplaceParams` to rewrite sign-in URLs:
+    - `/authorize` requests: appends `login_hint=<email>` — but only if neither `login_hint` nor `sid` is already present (a `sid` means a session is already selected; overriding it would break sign-in).
+    - `/saml2` and `/wsfed` requests: appends `whr=<email domain>` if `whr` is not already present (SAML/WS-Fed flows use realm discovery, not `login_hint`).
+  - The "only if not already present" guarantee is enforced by **higher-priority `allow` rules** whose `regexFilter` matches URLs already carrying the parameter — this also prevents the rewritten request from being redirected again. Any change to the redirect rules must keep the paired allow rules in sync.
+  - `regexFilter` patterns are RE2, which has no lookahead/lookbehind — hence the allow-rule pattern rather than a negative match in the redirect rule.
+  - Dynamic rules persist across service worker restarts, but `init()` re-syncs them on every worker start so they track the current profile email (from `chrome.identity.getProfileUserInfo`) and stored state.
+  - Clicking the toolbar icon (`chrome.action.onClicked`) toggles the behavior: on adds the rules, off removes them; state is persisted in `chrome.storage.local` and reflected as an "Off" badge on the icon.
 
 Behavior guarantees to preserve when modifying the request rewriting: never override an existing `login_hint`, `sid`, or `whr` parameter, and only touch `login.microsoftonline.com` URLs.
 
