@@ -1,0 +1,32 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+"Use My Current Account" is a Microsoft Edge browser extension (also Chrome-compatible) that skips the account-picker screen on Microsoft sign-in pages by defaulting to the browser profile's account. It is published to the Edge Extension Store. The intended usage model is one Edge profile per AAD account, with the extension installed in each profile.
+
+## Development
+
+There is no build system, package manager, linter, or test suite. The extension is plain JavaScript loaded directly by the browser:
+
+- To test changes, load the repository root as an unpacked extension (edge://extensions or chrome://extensions with Developer mode enabled) and reload it after edits.
+- When releasing, bump `version` in `manifest.json`.
+
+## Architecture
+
+The entire extension is two files:
+
+- `manifest.json` — Manifest V2, with a **persistent** background page. Permissions: `identity`/`identity.email` (to read the profile's email), `storage` (to persist the on/off toggle), and `webRequest`/`webRequestBlocking` scoped to `login.microsoftonline.com`.
+- `src/background.js` — all logic:
+  - Reads the profile email via `chrome.identity.getProfileUserInfo` at startup.
+  - Two **blocking** `chrome.webRequest.onBeforeRequest` listeners rewrite sign-in URLs by returning a `redirectUrl`:
+    - `/authorize*` requests: appends `login_hint=<email>` — but only if neither `login_hint` nor `sid` is already present (a `sid` means a session is already selected; overriding it would break sign-in).
+    - `/saml2*` and `/wsfed*` requests: appends `whr=<email domain>` if `whr` is not already present (SAML/WS-Fed flows use realm discovery, not `login_hint`).
+  - Clicking the toolbar icon toggles the behavior on/off; state is persisted in `chrome.storage.local` and reflected as an "Off" badge on the icon.
+
+Behavior guarantees to preserve when modifying the request rewriting: never override an existing `login_hint`, `sid`, or `whr` parameter, and only touch `login.microsoftonline.com` URLs.
+
+## Privacy Constraint
+
+Per `PrivacyPolicy.md`, the profile email address is used only to set `login_hint`/`whr` in requests and is never stored or transmitted anywhere else. Don't add code that persists or sends the email.
