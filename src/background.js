@@ -89,14 +89,6 @@ function buildRules(email) {
    return rules;
 }
 
-function setState(state) {
-   return new Promise(function (resolve) {
-      chrome.storage.local.set({
-         state: state
-      }, resolve);
-   });
-}
-
 function getState() {
    return new Promise(function (resolve) {
       chrome.storage.local.get('state', function (data) {
@@ -126,10 +118,14 @@ async function init() {
    await applyState(state);
 }
 
-chrome.action.onClicked.addListener(async function () {
-   var newState = !(await getState());
-   await setState(newState);
-   await applyState(newState);
+// The popup writes the toggle state to storage; react here so the rules and
+// badge stay in sync (the toolbar icon no longer fires onClicked once a
+// popup is set).
+chrome.storage.onChanged.addListener(function (changes, area) {
+   if (area === 'local' && changes.state) {
+      var state = changes.state.newValue === undefined ? true : changes.state.newValue;
+      applyState(state);
+   }
 });
 
 function updateIcon(state) {
