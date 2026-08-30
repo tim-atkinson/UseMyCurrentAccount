@@ -17,18 +17,16 @@ function getProfileEmail() {
 }
 
 function buildRules(email) {
-   var domain = email.split('@').pop();
-
    // The allow rules outrank the redirect rules, so a request that already
    // carries login_hint/sid (or whr) is never rewritten — this also stops the
    // rewritten request from being redirected again.
-   return [
+   var rules = [
       {
          id: ALLOW_AUTHORIZE,
          priority: 2,
          action: { type: 'allow' },
          condition: {
-            regexFilter: '^https?://login\\.microsoftonline\\.com/[^?]*/authorize[^?]*\\?(?:.*&)?(?:login_hint|sid)=',
+            regexFilter: '^https://login\\.microsoftonline\\.com/[^?]*/authorize[^?]*\\?(?:.*&)?(?:login_hint|sid)=',
             resourceTypes: RESOURCE_TYPES
          }
       },
@@ -46,38 +44,49 @@ function buildRules(email) {
             }
          },
          condition: {
-            regexFilter: '^https?://login\\.microsoftonline\\.com/[^?]*/authorize',
-            resourceTypes: RESOURCE_TYPES
-         }
-      },
-      {
-         id: ALLOW_REALM,
-         priority: 2,
-         action: { type: 'allow' },
-         condition: {
-            regexFilter: '^https?://login\\.microsoftonline\\.com/[^?]*/(?:saml2|wsfed)[^?]*\\?(?:.*&)?whr=',
-            resourceTypes: RESOURCE_TYPES
-         }
-      },
-      {
-         id: REDIRECT_REALM,
-         priority: 1,
-         action: {
-            type: 'redirect',
-            redirect: {
-               transform: {
-                  queryTransform: {
-                     addOrReplaceParams: [{ key: 'whr', value: domain }]
-                  }
-               }
-            }
-         },
-         condition: {
-            regexFilter: '^https?://login\\.microsoftonline\\.com/[^?]*/(?:saml2|wsfed)',
+            regexFilter: '^https://login\\.microsoftonline\\.com/[^?]*/authorize',
             resourceTypes: RESOURCE_TYPES
          }
       }
    ];
+
+   // The whr realm rules need the email's domain; skip them rather than
+   // inject a bogus value if the email is not in the expected form.
+   var at = email.indexOf('@');
+   if (at > 0 && at < email.length - 1) {
+      var domain = email.slice(at + 1);
+      rules.push(
+         {
+            id: ALLOW_REALM,
+            priority: 2,
+            action: { type: 'allow' },
+            condition: {
+               regexFilter: '^https://login\\.microsoftonline\\.com/[^?]*/(?:saml2|wsfed)[^?]*\\?(?:.*&)?whr=',
+               resourceTypes: RESOURCE_TYPES
+            }
+         },
+         {
+            id: REDIRECT_REALM,
+            priority: 1,
+            action: {
+               type: 'redirect',
+               redirect: {
+                  transform: {
+                     queryTransform: {
+                        addOrReplaceParams: [{ key: 'whr', value: domain }]
+                     }
+                  }
+               }
+            },
+            condition: {
+               regexFilter: '^https://login\\.microsoftonline\\.com/[^?]*/(?:saml2|wsfed)',
+               resourceTypes: RESOURCE_TYPES
+            }
+         }
+      );
+   }
+
+   return rules;
 }
 
 function setState(state) {
@@ -117,9 +126,6 @@ async function init() {
    await applyState(state);
 }
 
-chrome.runtime.onInstalled.addListener(init);
-chrome.runtime.onStartup.addListener(init);
-
 chrome.action.onClicked.addListener(async function () {
    var newState = !(await getState());
    await setState(newState);
@@ -138,6 +144,7 @@ function updateIcon(state) {
    });
 }
 
-// The service worker is not persistent; re-sync the rules on every start so
-// they track the current profile email and stored state.
+// The service worker is not persistent and starts on install, browser
+// startup, and any handled event; re-syncing the rules here on every start
+// keeps them tracking the current profile email and stored state.
 init();
