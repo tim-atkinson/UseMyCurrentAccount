@@ -154,6 +154,94 @@ function updateIcon(state) {
    });
 }
 
+// --- Activity log -----------------------------------------------------------
+// declarativeNetRequest match feedback is only available to unpacked
+// extensions, so processed sign-ins are observed with non-blocking webRequest
+// listeners on the same URLs the rules target. Log entries deliberately
+// contain no email addresses and no URLs (request URLs carry login_hint);
+// only a timestamp, the flow, the action taken, and the initiating site.
+
+var MAX_LOG_ENTRIES = 200;
+var rewrittenRequestIds = new Set();
+
+var WATCH_FILTER = {
+   urls: [
+      'https://login.microsoftonline.com/*/authorize*',
+      'https://login.microsoftonline.com/*/saml2*',
+      'https://login.microsoftonline.com/*/wsfed*'
+   ],
+   types: RESOURCE_TYPES
+};
+
+function classifyFlow(url) {
+   var path = url.pathname;
+   if (path.indexOf('/authorize') !== -1) { return 'oauth'; }
+   if (path.indexOf('/saml2') !== -1) { return 'saml'; }
+   if (path.indexOf('/wsfed') !== -1) { return 'wsfed'; }
+   return null;
+}
+
+function hasHint(url, flow) {
+   var params = url.searchParams;
+   if (flow === 'oauth') {
+      return params.has('login_hint') || params.has('sid');
+   }
+   return params.has('whr');
+}
+
+function appendLog(entry) {
+   chrome.storage.local.get('log', function (data) {
+      var log = Array.isArray(data.log) ? data.log : [];
+      log.unshift(entry);
+      if (log.length > MAX_LOG_ENTRIES) {
+         log.length = MAX_LOG_ENTRIES;
+      }
+      chrome.storage.local.set({ log: log });
+   });
+}
+
+// A matching request that already carries the hint was left alone — unless it
+// is the re-issued request following our own rewrite (same requestId).
+chrome.webRequest.onBeforeRequest.addListener(function (details) {
+   if (rewrittenRequestIds.has(details.requestId)) { return; }
+   var url = new URL(details.url);
+   var flow = classifyFlow(url);
+   if (!flow || !hasHint(url, flow)) { return; }
+   getState().then(function (state) {
+      if (!state) { return; }
+      appendLog({ t: Date.now(), flow: flow, action: 'skipped', site: details.initiator || null });
+   });
+}, WATCH_FILTER);
+
+// A redirect back to the same endpoint with the hint parameter now present is
+// our rule firing (the DNR rewrite surfaces as a redirect of the request).
+chrome.webRequest.onBeforeRedirect.addListener(function (details) {
+   var url = new URL(details.url);
+   var flow = classifyFlow(url);
+   if (!flow || hasHint(url, flow)) { return; }
+   var target;
+   try {
+      target = new URL(details.redirectUrl);
+   } catch (e) {
+      return;
+   }
+   if (target.origin !== url.origin || target.pathname !== url.pathname) { return; }
+   if (!hasHint(target, flow)) { return; }
+   rewrittenRequestIds.add(details.requestId);
+   if (rewrittenRequestIds.size > 500) {
+      rewrittenRequestIds.clear();
+   }
+   getState().then(function (state) {
+      if (!state) { return; }
+      appendLog({
+         t: Date.now(),
+         flow: flow,
+         action: flow === 'oauth' ? 'hinted' : 'realm',
+         site: details.initiator || null
+      });
+   });
+}, WATCH_FILTER);
+
 // The service worker is not persistent and starts on install, browser
 // startup, and any handled event; re-syncing the rules here on every start
 // keeps them tracking the current profile email and stored state.
