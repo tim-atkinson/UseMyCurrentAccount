@@ -15,7 +15,7 @@ There is no build system, package manager, linter, or test suite. The extension 
 
 ## Architecture
 
-The entire extension is two files:
+The extension is three source files:
 
 - `manifest.json` — Manifest V3, with a (non-persistent) background **service worker**. Permissions: `identity`/`identity.email` (to read the profile's email), `storage` (to persist the on/off toggle), and `declarativeNetRequest` with `host_permissions` scoped to `login.microsoftonline.com`.
 - `src/background.js` — all logic. MV3 forbids blocking `webRequest`, so URL rewriting is done with **declarativeNetRequest dynamic rules** (installed via `updateDynamicRules`, keyed by fixed rule ids):
@@ -25,7 +25,8 @@ The entire extension is two files:
   - The "only if not already present" guarantee is enforced by **higher-priority `allow` rules** whose `regexFilter` matches URLs already carrying the parameter — this also prevents the rewritten request from being redirected again. Any change to the redirect rules must keep the paired allow rules in sync.
   - `regexFilter` patterns are RE2, which has no lookahead/lookbehind — hence the allow-rule pattern rather than a negative match in the redirect rule.
   - Dynamic rules persist across service worker restarts, but `init()` re-syncs them on every worker start so they track the current profile email (from `chrome.identity.getProfileUserInfo`) and stored state.
-  - Clicking the toolbar icon (`chrome.action.onClicked`) toggles the behavior: on adds the rules, off removes them; state is persisted in `chrome.storage.local` and reflected as an "Off" badge on the icon.
+  - The on/off state lives in `chrome.storage.local`; the background worker listens via `chrome.storage.onChanged` and reacts by adding/removing the rules and updating the "Off" badge. (`action.onClicked` does not fire once a popup is set — state changes must go through storage.)
+- `src/popup.html` + `src/popup.js` — the toolbar popup: an enable/disable toggle (writes `state` to storage, which the background worker picks up) and a read-only display of the profile email that will be injected. All DOM updates use `textContent`, never `innerHTML`.
 
 Behavior guarantees to preserve when modifying the request rewriting: never override an existing `login_hint`, `sid`, or `whr` parameter, and only touch `https://login.microsoftonline.com/` URLs — HTTPS only, so the email is never attached to an unencrypted request.
 

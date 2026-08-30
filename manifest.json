@@ -1,6 +1,6 @@
 {
   "name": "Use My Current Account",
-  "version": "2.0",
+  "version": "2.1",
   "description": "Use the browser's profile when signing into Microsoft sites.",
   "homepage_url": "https://github.com/tim-atkinson/UseMyCurrentAccount",
   "permissions": [
@@ -22,6 +22,7 @@
     "service_worker": "src/background.js"
   },
   "action": {
+    "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon_16.png",
       "20": "icons/icon_20.png",
