@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-"Use My Current Account" is a Microsoft Edge browser extension (also Chrome-compatible) that skips the account-picker screen on Microsoft sign-in pages by defaulting to the browser profile's account. It is published to the Edge Extension Store. The intended usage model is one Edge profile per AAD account, with the extension installed in each profile.
+"Use My Current Account" is a Microsoft Edge browser extension (also Chrome-compatible) that skips the account-picker screen on Microsoft sign-in pages by defaulting to the browser profile's account. The intended usage model is one Edge profile per AAD account, with the extension installed in each profile.
 
 ## Development
 
@@ -27,7 +27,7 @@ The entire extension is two files:
   - Dynamic rules persist across service worker restarts, but `init()` re-syncs them on every worker start so they track the current profile email (from `chrome.identity.getProfileUserInfo`) and stored state.
   - Clicking the toolbar icon (`chrome.action.onClicked`) toggles the behavior: on adds the rules, off removes them; state is persisted in `chrome.storage.local` and reflected as an "Off" badge on the icon.
 
-Behavior guarantees to preserve when modifying the request rewriting: never override an existing `login_hint`, `sid`, or `whr` parameter, and only touch `login.microsoftonline.com` URLs.
+Behavior guarantees to preserve when modifying the request rewriting: never override an existing `login_hint`, `sid`, or `whr` parameter, and only touch `https://login.microsoftonline.com/` URLs — HTTPS only, so the email is never attached to an unencrypted request.
 
 ## Privacy Constraint
 
