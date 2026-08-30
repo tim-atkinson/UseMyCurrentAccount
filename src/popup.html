@@ -159,6 +159,22 @@
       color: #a00;
     }
 
+    .link {
+      display: block;
+      margin-top: 10px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: #0078d4;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .link:hover {
+      text-decoration: underline;
+    }
+
     @media (prefers-color-scheme: dark) {
       body {
         color: #eee;
@@ -181,6 +197,10 @@
       #new-account {
         border-color: #666;
       }
+
+      .link {
+        color: #6cb8f0;
+      }
     }
   </style>
 </head>
@@ -202,6 +222,7 @@
       </form>
       <div id="error" class="error" hidden></div>
     </div>
+    <button type="button" id="view-log" class="link">View activity log</button>
   </main>
   <script src="popup.js"></script>
 </body>

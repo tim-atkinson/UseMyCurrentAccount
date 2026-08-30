@@ -130,6 +130,10 @@ async function removeAccount(email) {
    });
 }
 
+document.getElementById('view-log').addEventListener('click', function () {
+   chrome.tabs.create({ url: chrome.runtime.getURL('src/log.html') });
+});
+
 document.getElementById('toggle').addEventListener('change', function (event) {
    var state = event.target.checked;
    renderState(state);
