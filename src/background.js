@@ -97,10 +97,30 @@ function getState() {
    });
 }
 
-async function applyState(state) {
+function getSelectedAccount() {
+   return new Promise(function (resolve) {
+      chrome.storage.local.get(['selected', 'accounts'], function (data) {
+         var accounts = Array.isArray(data.accounts) ? data.accounts : [];
+         var selected = typeof data.selected === 'string' ? data.selected : null;
+         // Only honor a selection that is still in the saved account list;
+         // anything else falls back to the profile account.
+         resolve(selected && accounts.indexOf(selected) !== -1 ? selected : null);
+      });
+   });
+}
+
+async function sync() {
+   var state = await getState();
    updateIcon(state);
 
-   var email = state ? await getProfileEmail() : null;
+   // A user-selected account takes precedence; the profile account is the
+   // default. The selected value is user-entered, so it gets the same
+   // guarded treatment as the profile email in buildRules.
+   var email = null;
+   if (state) {
+      email = (await getSelectedAccount()) || await getProfileEmail();
+   }
+
    if (state && email) {
       await chrome.declarativeNetRequest.updateDynamicRules({
          removeRuleIds: ALL_RULE_IDS,
@@ -113,18 +133,12 @@ async function applyState(state) {
    }
 }
 
-async function init() {
-   var state = await getState();
-   await applyState(state);
-}
-
-// The popup writes the toggle state to storage; react here so the rules and
-// badge stay in sync (the toolbar icon no longer fires onClicked once a
-// popup is set).
+// The popup writes the toggle state and account selection to storage; react
+// here so the rules and badge stay in sync (the toolbar icon no longer fires
+// onClicked once a popup is set).
 chrome.storage.onChanged.addListener(function (changes, area) {
-   if (area === 'local' && changes.state) {
-      var state = changes.state.newValue === undefined ? true : changes.state.newValue;
-      applyState(state);
+   if (area === 'local' && (changes.state || changes.selected)) {
+      sync();
    }
 });
 
@@ -143,4 +157,4 @@ function updateIcon(state) {
 // The service worker is not persistent and starts on install, browser
 // startup, and any handled event; re-syncing the rules here on every start
 // keeps them tracking the current profile email and stored state.
-init();
+sync();

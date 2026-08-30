@@ -6,4 +6,8 @@ With that out of the way, here's a breakdown of all the information we may colle
 
 * Email Address
 
-Used to set the `login_hint` in the authorize requests. Not stored or transmitted anywhere.
+The browser profile's email address is used to set the `login_hint`/`whr` parameters on sign-in requests to `https://login.microsoftonline.com`. It is not stored or transmitted anywhere else.
+
+* Accounts you add
+
+Email addresses you add in the popup are saved in the browser's local extension storage so they can be listed for selection. They never leave your browser, except that the selected one is used to set `login_hint`/`whr` on sign-in requests exactly as above. Removing an account from the list deletes it from storage.

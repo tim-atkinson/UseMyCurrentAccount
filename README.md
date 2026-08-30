@@ -10,8 +10,10 @@ the browser profile's account.
 The recommended way to use this is to use a separate profile in Edge for each AAD account you have and install
 this extension in each profile. Then go to the site you want in the profile you want and you won't be prompted to login.
 
-If you want to choose a different account, click the toolbar icon and switch the toggle off. The
-popup also shows which account the extension will sign you in with.
+Click the toolbar icon to open the popup: switch the toggle off to be prompted normally, or add
+other account emails and select which one to sign in with — the profile's account is the default.
+(Browsers don't let extensions list your other signed-in accounts, so additional accounts are
+entered manually.)
 
 ## Installation
 
